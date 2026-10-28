@@ -1,21 +1,26 @@
 import { Router, Request, Response } from "express";
-import authRoutes from "./auth.routes";
-import userRoutes from "./user.routes";
-import postRoutes from "./post.routes";
-import commentRoutes from "./comment.routes";
-import statsRoutes from "./stats.routes";
+import { AuthRoutes } from "./auth.routes";
+import { UserRoutes } from "./user.routes";
+import { PostRoutes } from "./post.routes";
+import { CommentRoutes } from "./comment.routes";
+import { StatsRoutes } from "./stats.routes";
 
-const router = Router();
+export class ApiRoutes {
+  static create(): Router {
+    const router = Router();
 
-// Health check — used to verify the API is up
-router.get("/health", (_req: Request, res: Response) => {
-  res.status(200).json({ status: "ok" });
-});
+    router.get("/health", (_req: Request, res: Response) => {
+      res.status(200).json({ status: "ok" });
+    });
 
-router.use("/auth", authRoutes);
-router.use("/users", userRoutes);
-router.use("/posts", postRoutes);
-router.use("/comments", commentRoutes);
-router.use("/stats", statsRoutes);
+    router.use("/auth", AuthRoutes.create());
+    router.use("/users", UserRoutes.create());
+    router.use("/posts", PostRoutes.create());
+    router.use("/comments", CommentRoutes.create());
+    router.use("/stats", StatsRoutes.create());
 
-export default router;
+    return router;
+  }
+}
+
+export default ApiRoutes.create();

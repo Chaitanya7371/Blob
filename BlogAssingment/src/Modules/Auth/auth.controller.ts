@@ -1,19 +1,18 @@
 import { Request, Response, NextFunction } from "express";
-import { AuthService } from "./auth.service";
+import { authService } from "./auth.service";
 import { ApiResponse } from "../../utils/ApiResponse";
 import { AppError } from "../../utils/AppError";
-import { setAuthCookie, clearAuthCookie } from "../../utils/cookies";
-import { AUTH } from "../../constants/auth";
+import { TokenHelper } from "../../utils/token";
 
 /**
  * Auth controller — signup, login, logout, logout-all.
  * Body fields are already validated by Zod middleware.
  */
-export const AuthController = {
-  async signup(req: Request, res: Response, next: NextFunction) {
+export class AuthController {
+  async signup(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { name, email, password } = req.body;
-      const user = await AuthService.signup({ name, email, password });
+      const user = await authService.signup({ name, email, password });
 
       res
         .status(201)
@@ -21,19 +20,19 @@ export const AuthController = {
     } catch (error) {
       next(error);
     }
-  },
+  }
 
-  async login(req: Request, res: Response, next: NextFunction) {
+  async login(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { email, password } = req.body;
       const userAgent = req.headers["user-agent"] || "";
-      const { user, session } = await AuthService.login(
+      const ip = this.clientIp(req);
+      const { user, session } = await authService.login(
         email,
         password,
-        userAgent
+        userAgent,
+        ip
       );
-
-      setAuthCookie(res, session.token);
 
       res.status(200).json(
         ApiResponse.success("Logged in successfully", {
@@ -44,37 +43,35 @@ export const AuthController = {
     } catch (error) {
       next(error);
     }
-  },
+  }
 
-  async logout(req: Request, res: Response, next: NextFunction) {
+  async logout(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const token = req.cookies?.[AUTH.COOKIE_NAME] as string | undefined;
+      const token = TokenHelper.extractBearer(req);
 
       if (!token) {
         throw new AppError("Unauthorized", 401);
       }
 
-      await AuthService.logout(token);
-      clearAuthCookie(res);
+      await authService.logout(token);
 
       res.status(200).json(ApiResponse.success("Logged out successfully"));
     } catch (error) {
       next(error);
     }
-  },
+  }
 
-  /**
-   * Delete ALL sessions for the logged-in user (every device),
-   * then clear the current cookie.
-   */
-  async logoutAll(req: Request, res: Response, next: NextFunction) {
+  async logoutAll(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
     try {
       if (!req.user) {
         throw new AppError("Unauthorized", 401);
       }
 
-      const deletedCount = await AuthService.logoutAll(String(req.user._id));
-      clearAuthCookie(res);
+      const deletedCount = await authService.logoutAll(String(req.user._id));
 
       res.status(200).json(
         ApiResponse.success("Logged out from all devices", {
@@ -84,5 +81,15 @@ export const AuthController = {
     } catch (error) {
       next(error);
     }
-  },
-};
+  }
+
+  private clientIp(req: Request): string {
+    const forwarded = req.headers["x-forwarded-for"];
+    if (typeof forwarded === "string" && forwarded.trim()) {
+      return forwarded.split(",")[0].trim();
+    }
+    return req.ip || req.socket.remoteAddress || "unknown";
+  }
+}
+
+export const authController = new AuthController();

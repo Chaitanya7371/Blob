@@ -1,42 +1,48 @@
 import { Router } from "express";
-import { PostController } from "../Modules/Post/post.controller";
-import { CommentController } from "../Modules/Comment/comment.controller";
-import { authMiddleware } from "../middlewares/auth";
-import { validateBody } from "../middlewares/validate";
-import {
-  createPostSchema,
-  updatePostSchema,
-  createCommentSchema,
-} from "../middlewares/validators";
+import { postController } from "../Modules/Post/post.controller";
+import { commentController } from "../Modules/Comment/comment.controller";
+import { AuthMiddleware } from "../middlewares/auth";
+import { ValidateMiddleware } from "../middlewares/validate";
+import { Validators } from "../middlewares/validators";
 
-const router = Router();
+export class PostRoutes {
+  static create(): Router {
+    const router = Router();
 
-/**
- * Post + nested comment routes
- */
-router.get("/", PostController.list);
-router.post(
-  "/",
-  authMiddleware,
-  validateBody(createPostSchema),
-  PostController.create
-);
+    router.get("/", postController.list.bind(postController));
+    router.post(
+      "/",
+      AuthMiddleware.handle,
+      ValidateMiddleware.body(Validators.createPostSchema),
+      postController.create.bind(postController)
+    );
 
-router.get("/:id/comments", CommentController.list);
-router.post(
-  "/:id/comments",
-  authMiddleware,
-  validateBody(createCommentSchema),
-  CommentController.create
-);
+    router.get(
+      "/:id/comments",
+      commentController.list.bind(commentController)
+    );
+    router.post(
+      "/:id/comments",
+      AuthMiddleware.handle,
+      ValidateMiddleware.body(Validators.createCommentSchema),
+      commentController.create.bind(commentController)
+    );
 
-router.get("/:id", PostController.getById);
-router.patch(
-  "/:id",
-  authMiddleware,
-  validateBody(updatePostSchema),
-  PostController.update
-);
-router.delete("/:id", authMiddleware, PostController.remove);
+    router.get("/:id", postController.getById.bind(postController));
+    router.patch(
+      "/:id",
+      AuthMiddleware.handle,
+      ValidateMiddleware.body(Validators.updatePostSchema),
+      postController.update.bind(postController)
+    );
+    router.delete(
+      "/:id",
+      AuthMiddleware.handle,
+      postController.remove.bind(postController)
+    );
 
-export default router;
+    return router;
+  }
+}
+
+export default PostRoutes.create();

@@ -1,22 +1,23 @@
 import mongoose from "mongoose";
-import config from "../../constants/config";
-import { MESSAGES } from "../../constants/messages";
+import { AppConfig } from "../../constants/config";
+import { Messages } from "../../constants/messages";
 
 /**
  * Connect to MongoDB Atlas using Mongoose.
- * Call this once when the server starts.
- *
- * The database name comes from the URI path, e.g.:
- * ...mongodb.net/blog_yourname?...
+ * Database name comes from the URI path (blog_chaitanya).
  */
-export const connectDatabase = async (): Promise<void> => {
-  if (!config.mongodbUri) {
-    throw new Error(
-      "MONGODB_URI is missing. Copy .env.example to .env and add your Atlas connection string."
-    );
-  }
+export class DatabaseProvider {
+  static async connect(): Promise<void> {
+    if (!AppConfig.mongodbUri) {
+      throw new Error(
+        "MONGODB_URI is missing. Copy .env.example to .env and add your Atlas connection string."
+      );
+    }
 
-  await mongoose.connect(config.mongodbUri);
-  console.log(MESSAGES.DB_CONNECTED);
-  console.log(`Database: ${mongoose.connection.name}`);
-};
+    await mongoose.connect(AppConfig.mongodbUri);
+    console.log(Messages.DB_CONNECTED);
+    console.log(`Database: ${mongoose.connection.name}`);
+  }
+}
+
+export const connectDatabase = DatabaseProvider.connect;

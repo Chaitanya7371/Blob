@@ -6,17 +6,17 @@ export type CreateUserData = {
   password: string;
 };
 
-export const UserRepository = {
-  /** Create a new user (password is hashed by the User model pre-save hook) */
+export class UserRepository {
+  /** Create a new user (password hashed by User model pre-save hook) */
   async create(data: CreateUserData): Promise<IUser> {
     const user = await User.create(data);
     return user;
-  },
+  }
 
-  /** Find by email (used for signup duplicate check) */
+  /** Find by email (signup duplicate check) */
   async findByEmail(email: string): Promise<IUser | null> {
     return User.findOne({ email: email.toLowerCase().trim() });
-  },
+  }
 
   /**
    * Find by email AND include the password field.
@@ -26,12 +26,12 @@ export const UserRepository = {
     return User.findOne({ email: email.toLowerCase().trim() }).select(
       "+password"
     );
-  },
+  }
 
   /** Find user by id (no password) */
   async findById(id: string): Promise<IUser | null> {
     return User.findById(id);
-  },
+  }
 
   /** Update only the user's name */
   async updateName(id: string, name: string): Promise<IUser | null> {
@@ -40,5 +40,7 @@ export const UserRepository = {
       { name },
       { new: true, runValidators: true }
     );
-  },
-};
+  }
+}
+
+export const userRepository = new UserRepository();

@@ -1,13 +1,19 @@
 import { Router } from "express";
-import { CommentController } from "../Modules/Comment/comment.controller";
-import { authMiddleware } from "../middlewares/auth";
+import { commentController } from "../Modules/Comment/comment.controller";
+import { AuthMiddleware } from "../middlewares/auth";
 
-const router = Router();
+export class CommentRoutes {
+  static create(): Router {
+    const router = Router();
 
-/**
- * DELETE /api/comments/:id
- * Allowed for comment author OR post author.
- */
-router.delete("/:id", authMiddleware, CommentController.remove);
+    router.delete(
+      "/:id",
+      AuthMiddleware.handle,
+      commentController.remove.bind(commentController)
+    );
 
-export default router;
+    return router;
+  }
+}
+
+export default CommentRoutes.create();

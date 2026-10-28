@@ -13,19 +13,15 @@ export type StatsResult = {
 
 /**
  * All stats in ONE aggregation using $facet.
- * Starts from published posts only, then splits into 4 branches.
  */
-export const StatsRepository = {
+export class StatsRepository {
   async getPublicStats(): Promise<StatsResult> {
     const result = await Post.aggregate([
-      // Only published posts feed into every facet branch
       { $match: { status: "published" } },
       {
         $facet: {
-          // a) total number of published posts
           totalPublished: [{ $count: "count" }],
 
-          // b) top 10 tags ($unwind + $group)
           topTags: [
             { $unwind: "$tags" },
             {
@@ -45,7 +41,6 @@ export const StatsRepository = {
             },
           ],
 
-          // c) top 5 authors by published posts ($lookup on users)
           topAuthors: [
             {
               $group: {
@@ -57,7 +52,7 @@ export const StatsRepository = {
             { $limit: 5 },
             {
               $lookup: {
-                from: "users", // MongoDB collection name for the User model
+                from: "users",
                 localField: "_id",
                 foreignField: "_id",
                 as: "user",
@@ -74,7 +69,6 @@ export const StatsRepository = {
             },
           ],
 
-          // d) top 5 most-commented posts (title + commentCount)
           topCommentedPosts: [
             { $sort: { commentCount: -1, createdAt: -1 } },
             { $limit: 5 },
@@ -103,5 +97,7 @@ export const StatsRepository = {
       topAuthors: facet.topAuthors ?? [],
       topCommentedPosts: facet.topCommentedPosts ?? [],
     };
-  },
-};
+  }
+}
+
+export const statsRepository = new StatsRepository();

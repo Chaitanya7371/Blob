@@ -1,28 +1,22 @@
 /**
- * OpenAPI 3 specification for Swagger UI.
- * Keep this file updated when you add new endpoints.
+ * OpenAPI 3 spec for Swagger UI at /api/docs
  */
-export const openApiSpec = {
+const openApiSpecData = {
   openapi: "3.0.3",
   info: {
-    title: "Blog Assignment API",
+    title: "Blog API",
     version: "1.0.0",
     description:
-      "Node.js + Express + TypeScript + MongoDB blog API with auth, posts, comments, and stats.",
+      "Node.js + Express + TypeScript + MongoDB + Redis blog API with auth, posts, comments, and stats.",
   },
-  servers: [
-    {
-      url: "http://localhost:3000/api",
-      description: "Local development",
-    },
-  ],
+  servers: [{ url: "/api", description: "API base" }],
   components: {
     securitySchemes: {
-      cookieAuth: {
-        type: "apiKey",
-        in: "cookie",
-        name: "token",
-        description: "Session cookie set by POST /auth/login",
+      bearerAuth: {
+        type: "http",
+        scheme: "bearer",
+        bearerFormat: "SessionToken",
+        description: "Token returned by POST /auth/login",
       },
     },
     schemas: {
@@ -122,9 +116,9 @@ export const openApiSpec = {
     "/auth/login": {
       post: {
         tags: ["Auth"],
-        summary: "Login and create a session cookie",
+        summary: "Login and create a session",
         description:
-          "After 5 failed attempts in 15 minutes the email is locked (429).",
+          "Returns a bearer token. After 5 failed attempts (per email or per IP) in 15 minutes → 429.",
         requestBody: {
           required: true,
           content: {
@@ -141,9 +135,9 @@ export const openApiSpec = {
           },
         },
         responses: {
-          "200": { description: "Logged in (sets cookie `token`)" },
+          "200": { description: "Logged in (returns token)" },
           "401": { description: "Invalid email or password" },
-          "429": { description: "Too many failed attempts" },
+          "429": { description: "Too many login attempts" },
         },
       },
     },
@@ -151,6 +145,7 @@ export const openApiSpec = {
       post: {
         tags: ["Auth"],
         summary: "Logout current session",
+        security: [{ bearerAuth: [] }],
         responses: {
           "200": { description: "Logged out" },
           "401": { description: "Unauthorized" },
@@ -160,10 +155,10 @@ export const openApiSpec = {
     "/auth/logout-all": {
       post: {
         tags: ["Auth"],
-        summary: "Logout from every device (delete all sessions)",
-        security: [{ cookieAuth: [] }],
+        summary: "Logout all sessions (every device)",
+        security: [{ bearerAuth: [] }],
         responses: {
-          "200": { description: "All sessions deleted" },
+          "200": { description: "Logged out from all devices" },
           "401": { description: "Unauthorized" },
         },
       },
@@ -171,17 +166,17 @@ export const openApiSpec = {
     "/users/me": {
       get: {
         tags: ["Users"],
-        summary: "Get current user profile",
-        security: [{ cookieAuth: [] }],
+        summary: "Current user profile",
+        security: [{ bearerAuth: [] }],
         responses: {
-          "200": { description: "Profile (no password)" },
+          "200": { description: "Profile (no password). Header X-Cache HIT|MISS" },
           "401": { description: "Unauthorized" },
         },
       },
       patch: {
         tags: ["Users"],
-        summary: "Update current user's name",
-        security: [{ cookieAuth: [] }],
+        summary: "Update name only",
+        security: [{ bearerAuth: [] }],
         requestBody: {
           required: true,
           content: {
@@ -198,7 +193,6 @@ export const openApiSpec = {
         },
         responses: {
           "200": { description: "Updated" },
-          "400": { description: "Validation error" },
           "401": { description: "Unauthorized" },
         },
       },
@@ -206,10 +200,10 @@ export const openApiSpec = {
     "/users/me/posts": {
       get: {
         tags: ["Users"],
-        summary: "List my posts (including drafts)",
-        security: [{ cookieAuth: [] }],
+        summary: "My posts including drafts (not cached)",
+        security: [{ bearerAuth: [] }],
         responses: {
-          "200": { description: "List of posts" },
+          "200": { description: "List of own posts" },
           "401": { description: "Unauthorized" },
         },
       },
@@ -217,7 +211,7 @@ export const openApiSpec = {
     "/posts": {
       get: {
         tags: ["Posts"],
-        summary: "List published posts (paginated)",
+        summary: "List published posts",
         parameters: [
           { name: "page", in: "query", schema: { type: "integer", default: 1 } },
           {
@@ -238,13 +232,15 @@ export const openApiSpec = {
           },
         ],
         responses: {
-          "200": { description: "Paginated published posts (no body field)" },
+          "200": {
+            description: "Paginated list (no body). Header X-Cache HIT|MISS",
+          },
         },
       },
       post: {
         tags: ["Posts"],
         summary: "Create a post",
-        security: [{ cookieAuth: [] }],
+        security: [{ bearerAuth: [] }],
         requestBody: {
           required: true,
           content: {
@@ -257,14 +253,10 @@ export const openApiSpec = {
                   body: { type: "string", minLength: 20 },
                   tags: {
                     type: "array",
-                    maxItems: 5,
                     items: { type: "string" },
+                    maxItems: 5,
                   },
-                  status: {
-                    type: "string",
-                    enum: ["draft", "published"],
-                    default: "draft",
-                  },
+                  status: { type: "string", enum: ["draft", "published"] },
                 },
               },
             },
@@ -272,7 +264,6 @@ export const openApiSpec = {
         },
         responses: {
           "201": { description: "Created" },
-          "400": { description: "Validation error" },
           "401": { description: "Unauthorized" },
         },
       },
@@ -285,7 +276,7 @@ export const openApiSpec = {
           { name: "id", in: "path", required: true, schema: { type: "string" } },
         ],
         responses: {
-          "200": { description: "Post" },
+          "200": { description: "Post. Header X-Cache HIT|MISS" },
           "400": { description: "Invalid id" },
           "404": { description: "Not found" },
         },
@@ -293,25 +284,10 @@ export const openApiSpec = {
       patch: {
         tags: ["Posts"],
         summary: "Update own post",
-        security: [{ cookieAuth: [] }],
+        security: [{ bearerAuth: [] }],
         parameters: [
           { name: "id", in: "path", required: true, schema: { type: "string" } },
         ],
-        requestBody: {
-          content: {
-            "application/json": {
-              schema: {
-                type: "object",
-                properties: {
-                  title: { type: "string" },
-                  body: { type: "string" },
-                  tags: { type: "array", items: { type: "string" } },
-                  status: { type: "string", enum: ["draft", "published"] },
-                },
-              },
-            },
-          },
-        },
         responses: {
           "200": { description: "Updated" },
           "403": { description: "Not the author" },
@@ -320,8 +296,8 @@ export const openApiSpec = {
       },
       delete: {
         tags: ["Posts"],
-        summary: "Delete own post (and its comments)",
-        security: [{ cookieAuth: [] }],
+        summary: "Delete own post and its comments",
+        security: [{ bearerAuth: [] }],
         parameters: [
           { name: "id", in: "path", required: true, schema: { type: "string" } },
         ],
@@ -335,9 +311,9 @@ export const openApiSpec = {
     "/posts/{id}/comments": {
       get: {
         tags: ["Comments"],
-        summary: "List comments for a published post",
+        summary: "List comments (page or cursor)",
         description:
-          "Page mode: `?page=1&limit=10`. Cursor mode: `?mode=cursor` or `?after=<lastCommentId>`.",
+          "Page: ?page=1&limit=10 (first page cached). Cursor: ?after=<lastCommentId>&limit=10",
         parameters: [
           { name: "id", in: "path", required: true, schema: { type: "string" } },
           { name: "page", in: "query", schema: { type: "integer", default: 1 } },
@@ -349,26 +325,24 @@ export const openApiSpec = {
           {
             name: "after",
             in: "query",
-            description: "Cursor = last comment id from previous page",
             schema: { type: "string" },
+            description: "Cursor: last comment id from previous page",
           },
           {
             name: "mode",
             in: "query",
-            description: "Set to `cursor` for first cursor page",
             schema: { type: "string", enum: ["cursor"] },
           },
         ],
         responses: {
-          "200": { description: "Comments with pagination" },
-          "400": { description: "Invalid id" },
+          "200": { description: "Comments list" },
           "404": { description: "Post not found" },
         },
       },
       post: {
         tags: ["Comments"],
         summary: "Add a comment (published posts only)",
-        security: [{ cookieAuth: [] }],
+        security: [{ bearerAuth: [] }],
         parameters: [
           { name: "id", in: "path", required: true, schema: { type: "string" } },
         ],
@@ -387,7 +361,7 @@ export const openApiSpec = {
           },
         },
         responses: {
-          "201": { description: "Created (commentCount +1)" },
+          "201": { description: "Created" },
           "401": { description: "Unauthorized" },
           "404": { description: "Post not found" },
         },
@@ -397,12 +371,12 @@ export const openApiSpec = {
       delete: {
         tags: ["Comments"],
         summary: "Delete a comment (comment author or post author)",
-        security: [{ cookieAuth: [] }],
+        security: [{ bearerAuth: [] }],
         parameters: [
           { name: "id", in: "path", required: true, schema: { type: "string" } },
         ],
         responses: {
-          "200": { description: "Deleted (commentCount -1)" },
+          "200": { description: "Deleted" },
           "403": { description: "Forbidden" },
           "404": { description: "Not found" },
         },
@@ -411,14 +385,17 @@ export const openApiSpec = {
     "/stats": {
       get: {
         tags: ["Stats"],
-        summary: "Public statistics (one $facet aggregation)",
+        summary: "Public statistics ($facet aggregation)",
         responses: {
-          "200": {
-            description:
-              "totalPublishedPosts, topTags, topAuthors, topCommentedPosts",
-          },
+          "200": { description: "Stats. Header X-Cache HIT|MISS" },
         },
       },
     },
   },
 } as const;
+
+export class OpenApiDocs {
+  static readonly spec = openApiSpecData;
+}
+
+export const openApiSpec = OpenApiDocs.spec;

@@ -30,9 +30,6 @@ export type ListPostsResult = {
   total: number;
 };
 
-/**
- * Normalize tags: trim, lowercase, max 5.
- */
 const normalizeTags = (tags?: string[]): string[] | undefined => {
   if (tags === undefined) {
     return undefined;
@@ -44,17 +41,17 @@ const normalizeTags = (tags?: string[]): string[] | undefined => {
     .slice(0, 5);
 };
 
-export const PostRepository = {
+export class PostRepository {
   async create(data: CreatePostData): Promise<IPost> {
     return Post.create({
       ...data,
       tags: normalizeTags(data.tags) ?? [],
     });
-  },
+  }
 
   async findById(id: string): Promise<IPost | null> {
     return Post.findById(id);
-  },
+  }
 
   async updateById(id: string, data: UpdatePostData): Promise<IPost | null> {
     const update: UpdatePostData = { ...data };
@@ -67,40 +64,35 @@ export const PostRepository = {
       new: true,
       runValidators: true,
     });
-  },
+  }
 
   async deleteById(id: string): Promise<IPost | null> {
     return Post.findByIdAndDelete(id);
-  },
+  }
 
-  /** Increase commentCount by 1 when a comment is added */
   async incrementCommentCount(postId: string): Promise<void> {
     await Post.updateOne({ _id: postId }, { $inc: { commentCount: 1 } });
-  },
+  }
 
-  /** Decrease commentCount by 1 when a comment is deleted */
   async decrementCommentCount(postId: string): Promise<void> {
     await Post.updateOne(
       { _id: postId, commentCount: { $gt: 0 } },
       { $inc: { commentCount: -1 } }
     );
-  },
+  }
 
-  /** All posts by one user (drafts + published) */
   async findByAuthor(authorId: string): Promise<IPost[]> {
     return Post.find({ author: authorId }).sort({ createdAt: -1 });
-  },
+  }
 
   /**
    * Public list of PUBLISHED posts.
-   * Uses $facet so we get the page of data AND the total count in ONE query.
-   * Body is excluded via $project.
+   * $facet returns page data AND total count in ONE query. Body excluded.
    */
   async listPublished(query: ListPostsQuery): Promise<ListPostsResult> {
     const { page, limit, search, tag, sort } = query;
     const skip = (page - 1) * limit;
 
-    // Build the filter for published posts only
     const match: Record<string, unknown> = { status: "published" };
 
     if (search && search.trim() !== "") {
@@ -111,8 +103,7 @@ export const PostRepository = {
       match.tags = tag.trim().toLowerCase();
     }
 
-    // Sort rules
-    let sortStage: Record<string, 1 | -1> = { createdAt: -1 }; // newest
+    let sortStage: Record<string, 1 | -1> = { createdAt: -1 };
     if (sort === "oldest") {
       sortStage = { createdAt: 1 };
     } else if (sort === "mostCommented") {
@@ -127,12 +118,7 @@ export const PostRepository = {
             { $sort: sortStage },
             { $skip: skip },
             { $limit: limit },
-            // Do NOT return the post body in the list
-            {
-              $project: {
-                body: 0,
-              },
-            },
+            { $project: { body: 0 } },
           ],
           totalCount: [{ $count: "count" }],
         },
@@ -144,11 +130,11 @@ export const PostRepository = {
       totalCount: Array<{ count: number }>;
     };
 
-    const total = facet.totalCount[0]?.count ?? 0;
-
     return {
       data: facet.data,
-      total,
+      total: facet.totalCount[0]?.count ?? 0,
     };
-  },
-};
+  }
+}
+
+export const postRepository = new PostRepository();

@@ -1,11 +1,8 @@
 import { Request, Response, NextFunction } from "express";
-import { PostService } from "./post.service";
+import { postService } from "./post.service";
 import { ApiResponse } from "../../utils/ApiResponse";
 import { AppError } from "../../utils/AppError";
 
-/**
- * Helper to parse list query params with safe defaults.
- */
 const parseListQuery = (req: Request) => {
   const page = Math.max(1, Number(req.query.page) || 1);
 
@@ -33,17 +30,16 @@ const parseListQuery = (req: Request) => {
   return { page, limit, search, tag, sort };
 };
 
-export const PostController = {
-  async create(req: Request, res: Response, next: NextFunction) {
+export class PostController {
+  async create(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       if (!req.user) {
         throw new AppError("Unauthorized", 401);
       }
 
-      // Body already validated by Zod
       const { title, body, tags, status } = req.body;
 
-      const post = await PostService.createPost(
+      const post = await postService.createPost(
         { title, body, tags, status },
         String(req.user._id),
         req.user.name
@@ -55,21 +51,28 @@ export const PostController = {
     } catch (error) {
       next(error);
     }
-  },
+  }
 
-  async getById(req: Request, res: Response, next: NextFunction) {
+  async getById(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
     try {
-      const post = await PostService.getPublishedPostById(req.params.id);
+      const { data, cache } = await postService.getPublishedPostById(
+        req.params.id
+      );
 
+      res.setHeader("X-Cache", cache);
       res
         .status(200)
-        .json(ApiResponse.success("Post fetched successfully", post));
+        .json(ApiResponse.success("Post fetched successfully", data));
     } catch (error) {
       next(error);
     }
-  },
+  }
 
-  async update(req: Request, res: Response, next: NextFunction) {
+  async update(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       if (!req.user) {
         throw new AppError("Unauthorized", 401);
@@ -77,7 +80,7 @@ export const PostController = {
 
       const { title, body, tags, status } = req.body;
 
-      const post = await PostService.updatePost(
+      const post = await postService.updatePost(
         req.params.id,
         String(req.user._id),
         { title, body, tags, status }
@@ -89,29 +92,33 @@ export const PostController = {
     } catch (error) {
       next(error);
     }
-  },
+  }
 
-  async remove(req: Request, res: Response, next: NextFunction) {
+  async remove(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       if (!req.user) {
         throw new AppError("Unauthorized", 401);
       }
 
-      await PostService.deletePost(req.params.id, String(req.user._id));
+      await postService.deletePost(req.params.id, String(req.user._id));
 
       res.status(200).json(ApiResponse.success("Post deleted successfully"));
     } catch (error) {
       next(error);
     }
-  },
+  }
 
-  async getMyPosts(req: Request, res: Response, next: NextFunction) {
+  async getMyPosts(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
     try {
       if (!req.user) {
         throw new AppError("Unauthorized", 401);
       }
 
-      const posts = await PostService.getMyPosts(String(req.user._id));
+      const posts = await postService.getMyPosts(String(req.user._id));
 
       res
         .status(200)
@@ -119,14 +126,16 @@ export const PostController = {
     } catch (error) {
       next(error);
     }
-  },
+  }
 
-  async list(req: Request, res: Response, next: NextFunction) {
+  async list(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const query = parseListQuery(req);
-      const { data, total } = await PostService.listPublishedPosts(query);
+      const { data, total, cache } =
+        await postService.listPublishedPosts(query);
       const totalPages = total === 0 ? 0 : Math.ceil(total / query.limit);
 
+      res.setHeader("X-Cache", cache);
       res.status(200).json({
         success: true,
         data,
@@ -140,5 +149,7 @@ export const PostController = {
     } catch (error) {
       next(error);
     }
-  },
-};
+  }
+}
+
+export const postController = new PostController();

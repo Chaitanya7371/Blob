@@ -1,62 +1,66 @@
 import express, { Application, Request, Response } from "express";
 import cors from "cors";
-import cookieParser from "cookie-parser";
 import swaggerUi from "swagger-ui-express";
-import routes from "./routes";
-import { errorHandler } from "./middlewares/errorHandler";
-import { MESSAGES } from "./constants/messages";
-import { openApiSpec } from "./docs/openapi";
+import { ApiRoutes } from "./routes";
+import { ErrorHandler } from "./middlewares/errorHandler";
+import { Messages } from "./constants/messages";
+import { OpenApiDocs } from "./docs/openapi";
 
 /**
- * Create and configure the Express app.
- * This file does NOT start listening — server.ts does that.
+ * Express application factory (class-based).
  */
-const app: Application = express();
+export class App {
+  readonly express: Application;
 
-// Allow front-end apps to send cookies (credentials)
-app.use(
-  cors({
-    origin: true,
-    credentials: true,
-  })
-);
+  constructor() {
+    this.express = express();
+    this.setupMiddleware();
+    this.setupRoutes();
+    this.setupErrorHandling();
+  }
 
-// Parse JSON bodies
-app.use(express.json());
+  private setupMiddleware(): void {
+    this.express.use(
+      cors({
+        origin: true,
+        credentials: true,
+      })
+    );
+    this.express.use(express.json());
+    this.express.set("trust proxy", 1);
 
-// Parse cookies so we can read req.cookies.token
-app.use(cookieParser());
+    this.express.use(
+      "/api/docs",
+      swaggerUi.serve,
+      swaggerUi.setup(OpenApiDocs.spec, {
+        customSiteTitle: "Blog API Docs",
+      })
+    );
+  }
 
-// Swagger UI docs — open http://localhost:3000/api/docs
-app.use(
-  "/api/docs",
-  swaggerUi.serve,
-  swaggerUi.setup(openApiSpec, {
-    customSiteTitle: "Blog API Docs",
-  })
-);
+  private setupRoutes(): void {
+    this.express.get("/", (_req: Request, res: Response) => {
+      res.status(200).json({
+        success: true,
+        message: Messages.SERVER_RUNNING,
+        docs: "/api/docs",
+      });
+    });
 
-// Simple root check
-app.get("/", (_req: Request, res: Response) => {
-  res.status(200).json({
-    success: true,
-    message: MESSAGES.SERVER_RUNNING,
-    docs: "/api/docs",
-  });
-});
+    this.express.use("/api", ApiRoutes.create());
+  }
 
-// All API routes start with /api
-app.use("/api", routes);
+  private setupErrorHandling(): void {
+    this.express.use((_req: Request, res: Response) => {
+      res.status(404).json({
+        success: false,
+        message: Messages.NOT_FOUND,
+      });
+    });
 
-// Catch-all for unknown routes
-app.use((_req: Request, res: Response) => {
-  res.status(404).json({
-    success: false,
-    message: MESSAGES.NOT_FOUND,
-  });
-});
+    this.express.use(ErrorHandler.handle);
+  }
+}
 
-// Error middleware must be last
-app.use(errorHandler);
-
+const app = new App().express;
 export default app;

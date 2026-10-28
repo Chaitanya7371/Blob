@@ -1,67 +1,100 @@
-import { CommentRepository } from "../../Repository/Comment.repository";
-import { PostRepository } from "../../Repository/Post.repository";
+import { commentRepository } from "../../Repository/Comment.repository";
+import { postRepository } from "../../Repository/Post.repository";
 import { AppError } from "../../utils/AppError";
-import { isValidObjectId } from "../../utils/objectId";
+import { ObjectIdHelper } from "../../utils/objectId";
+import { CacheHelper, CacheStatus } from "../../utils/cache";
+import { RedisTtl } from "../../constants/redis";
+import { PostCacheHelper } from "../../utils/postCache";
 import { IComment } from "../../model/Comment.model";
 
-async function assertPublishedPost(postId: string): Promise<void> {
-  if (!isValidObjectId(postId)) {
-    throw new AppError("Invalid id format", 400);
+type PageListPayload = {
+  data: unknown[];
+  total: number;
+};
+
+export type CommentsPageResult = PageListPayload & {
+  cache: CacheStatus;
+};
+
+export class CommentService {
+  private async assertPublishedPost(postId: string): Promise<void> {
+    if (!ObjectIdHelper.isValid(postId)) {
+      throw new AppError("Invalid id format", 400);
+    }
+
+    const post = await postRepository.findById(postId);
+
+    if (!post || post.status !== "published") {
+      throw new AppError("Post not found", 404);
+    }
   }
 
-  const post = await PostRepository.findById(postId);
-
-  if (!post || post.status !== "published") {
-    throw new AppError("Post not found", 404);
-  }
-}
-
-/**
- * Comment business logic.
- */
-export const CommentService = {
   async createComment(
     postId: string,
     userId: string,
     userName: string,
     text: string
   ): Promise<IComment> {
-    await assertPublishedPost(postId);
+    await this.assertPublishedPost(postId);
 
     if (!text || typeof text !== "string" || text.trim() === "") {
       throw new AppError("Comment text is required", 400);
     }
 
     if (text.trim().length > 500) {
-      throw new AppError("Comment text cannot be longer than 500 characters", 400);
+      throw new AppError(
+        "Comment text cannot be longer than 500 characters",
+        400
+      );
     }
 
-    const comment = await CommentRepository.create({
+    const comment = await commentRepository.create({
       postId,
       userId,
       userName,
       text: text.trim(),
     });
 
-    await PostRepository.incrementCommentCount(postId);
+    await postRepository.incrementCommentCount(postId);
+    await PostCacheHelper.invalidate(postId);
 
     return comment;
-  },
+  }
 
-  /** Page-based list (Part 4) */
   async listCommentsPage(
     postId: string,
     page: number,
     limit: number
-  ): Promise<{ data: IComment[]; total: number }> {
-    await assertPublishedPost(postId);
-    return CommentRepository.listByPostId({ postId, page, limit });
-  },
+  ): Promise<CommentsPageResult> {
+    await this.assertPublishedPost(postId);
 
-  /**
-   * Cursor-based list (Part 7).
-   * after = id of the last comment from the previous page (optional on first page).
-   */
+    const useCache = page === 1;
+    if (useCache) {
+      const cacheKey = await PostCacheHelper.buildCommentsListKey(postId, limit);
+      const cached = await CacheHelper.getJSON<PageListPayload>(cacheKey);
+      if (cached) {
+        return { ...cached, cache: "HIT" };
+      }
+    }
+
+    const result = await commentRepository.listByPostId({
+      postId,
+      page,
+      limit,
+    });
+
+    if (useCache) {
+      const cacheKey = await PostCacheHelper.buildCommentsListKey(postId, limit);
+      await CacheHelper.setJSON(
+        cacheKey,
+        result,
+        RedisTtl.COMMENTS_LIST_SECONDS
+      );
+    }
+
+    return { ...result, cache: "MISS" };
+  }
+
   async listCommentsCursor(
     postId: string,
     limit: number,
@@ -71,27 +104,28 @@ export const CommentService = {
     nextCursor: string | null;
     hasMore: boolean;
   }> {
-    await assertPublishedPost(postId);
+    await this.assertPublishedPost(postId);
 
-    if (after && !isValidObjectId(after)) {
+    if (after && !ObjectIdHelper.isValid(after)) {
       throw new AppError("Invalid after cursor id", 400);
     }
 
-    return CommentRepository.listByPostIdCursor(postId, limit, after);
-  },
+    return commentRepository.listByPostIdCursor(postId, limit, after);
+  }
 
   async deleteComment(commentId: string, userId: string): Promise<void> {
-    if (!isValidObjectId(commentId)) {
+    if (!ObjectIdHelper.isValid(commentId)) {
       throw new AppError("Invalid id format", 400);
     }
 
-    const comment = await CommentRepository.findById(commentId);
+    const comment = await commentRepository.findById(commentId);
 
     if (!comment) {
       throw new AppError("Comment not found", 404);
     }
 
-    const post = await PostRepository.findById(String(comment.postId));
+    const postId = String(comment.postId);
+    const post = await postRepository.findById(postId);
 
     if (!post) {
       throw new AppError("Post not found", 404);
@@ -104,7 +138,10 @@ export const CommentService = {
       throw new AppError("You are not allowed to delete this comment", 403);
     }
 
-    await CommentRepository.deleteById(commentId);
-    await PostRepository.decrementCommentCount(String(comment.postId));
-  },
-};
+    await commentRepository.deleteById(commentId);
+    await postRepository.decrementCommentCount(postId);
+    await PostCacheHelper.invalidate(postId);
+  }
+}
+
+export const commentService = new CommentService();

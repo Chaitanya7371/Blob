@@ -1,38 +1,43 @@
 import { Request, Response, NextFunction } from "express";
-import { UserService } from "./user.service";
+import { userService } from "./user.service";
 import { ApiResponse } from "../../utils/ApiResponse";
 import { AppError } from "../../utils/AppError";
 
 /**
  * User controller — current user profile endpoints.
- * These routes always use auth middleware, so req.user exists.
  */
-export const UserController = {
-  async getMe(req: Request, res: Response, next: NextFunction) {
+export class UserController {
+  async getMe(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       if (!req.user) {
         throw new AppError("Unauthorized", 401);
       }
 
-      const user = await UserService.getProfile(String(req.user._id));
+      const { data, cache } = await userService.getProfile(
+        String(req.user._id)
+      );
 
+      res.setHeader("X-Cache", cache);
       res
         .status(200)
-        .json(ApiResponse.success("Profile fetched successfully", user));
+        .json(ApiResponse.success("Profile fetched successfully", data));
     } catch (error) {
       next(error);
     }
-  },
+  }
 
-  async updateMe(req: Request, res: Response, next: NextFunction) {
+  async updateMe(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
     try {
       if (!req.user) {
         throw new AppError("Unauthorized", 401);
       }
 
-      // Only name can be updated
       const { name } = req.body;
-      const user = await UserService.updateName(String(req.user._id), name);
+      const user = await userService.updateName(String(req.user._id), name);
 
       res
         .status(200)
@@ -40,5 +45,7 @@ export const UserController = {
     } catch (error) {
       next(error);
     }
-  },
-};
+  }
+}
+
+export const userController = new UserController();

@@ -1,17 +1,26 @@
 import dotenv from "dotenv";
 
-// Load variables from .env file into process.env
 dotenv.config();
 
 /**
- * App config — read from environment variables.
- * Keep secrets (like MongoDB URI) in .env, never hardcode them.
+ * App config — secrets stay in .env, never hardcode them.
  */
+export class AppConfig {
+  static readonly port = Number(process.env.PORT) || 3000;
+  static readonly mongodbUri = process.env.MONGODB_URI || "";
+  static readonly redisUrl =
+    process.env.REDIS_URL || "redis://localhost:6379";
+  static readonly redisKeyPrefix =
+    process.env.REDIS_KEY_PREFIX || "blog_chaitanya";
+  static readonly nodeEnv = process.env.NODE_ENV || "development";
+}
+
 const config = {
-  // PORT and MONGODB_URI come from the .env file
-  port: Number(process.env.PORT) || 3000,
-  mongodbUri: process.env.MONGODB_URI || "",
-  nodeEnv: process.env.NODE_ENV || "development",
+  port: AppConfig.port,
+  mongodbUri: AppConfig.mongodbUri,
+  redisUrl: AppConfig.redisUrl,
+  redisKeyPrefix: AppConfig.redisKeyPrefix,
+  nodeEnv: AppConfig.nodeEnv,
 };
 
 export default config;

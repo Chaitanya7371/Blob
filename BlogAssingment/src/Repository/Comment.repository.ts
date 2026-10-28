@@ -25,26 +25,23 @@ export type CursorListResult = {
   hasMore: boolean;
 };
 
-export const CommentRepository = {
+export class CommentRepository {
   async create(data: CreateCommentData): Promise<IComment> {
     return Comment.create(data);
-  },
+  }
 
   async findById(id: string): Promise<IComment | null> {
     return Comment.findById(id);
-  },
+  }
 
   async deleteById(id: string): Promise<IComment | null> {
     return Comment.findByIdAndDelete(id);
-  },
+  }
 
   async deleteByPostId(postId: string): Promise<void> {
     await Comment.deleteMany({ postId });
-  },
+  }
 
-  /**
-   * Page-based list (Part 4). Newest first. Uses $facet.
-   */
   async listByPostId(query: ListCommentsQuery): Promise<ListCommentsResult> {
     const { postId, page, limit } = query;
     const skip = (page - 1) * limit;
@@ -72,13 +69,8 @@ export const CommentRepository = {
       data: facet.data,
       total: facet.totalCount[0]?.count ?? 0,
     };
-  },
+  }
 
-  /**
-   * Cursor-based list (Part 7 bonus).
-   * Pass after=<lastCommentId> to get the next page (older comments).
-   * Newest first.
-   */
   async listByPostIdCursor(
     postId: string,
     limit: number,
@@ -95,7 +87,6 @@ export const CommentRepository = {
         return { data: [], nextCursor: null, hasMore: false };
       }
 
-      // Comments older than the cursor (because we sort newest → oldest)
       match.$or = [
         { createdAt: { $lt: cursorComment.createdAt } },
         {
@@ -105,7 +96,6 @@ export const CommentRepository = {
       ];
     }
 
-    // Fetch one extra row to know if there is a next page
     const rows = await Comment.find(match)
       .sort({ createdAt: -1, _id: -1 })
       .limit(limit + 1);
@@ -116,5 +106,7 @@ export const CommentRepository = {
     const nextCursor = hasMore && last ? String(last._id) : null;
 
     return { data, nextCursor, hasMore };
-  },
-};
+  }
+}
+
+export const commentRepository = new CommentRepository();

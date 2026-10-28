@@ -1,11 +1,12 @@
 import { Router } from "express";
-import { StatsController } from "../Modules/Stats/stats.controller";
+import { statsController } from "../Modules/Stats/stats.controller";
 
-const router = Router();
+export class StatsRoutes {
+  static create(): Router {
+    const router = Router();
+    router.get("/", statsController.getStats.bind(statsController));
+    return router;
+  }
+}
 
-/**
- * GET /api/stats -> public blog statistics (one $facet aggregation)
- */
-router.get("/", StatsController.getStats);
-
-export default router;
+export default StatsRoutes.create();

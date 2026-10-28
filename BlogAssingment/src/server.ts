@@ -1,27 +1,31 @@
 import app from "./app";
-import config from "./constants/config";
-import { connectDatabase } from "./providers/database/connection";
-import { MESSAGES } from "./constants/messages";
+import { AppConfig } from "./constants/config";
+import { DatabaseProvider } from "./providers/database/connection";
+import { RedisProvider } from "./providers/redis/connection";
+import { Messages } from "./constants/messages";
 
 /**
- * Entry point of the application.
- * Start HTTP first (so Swagger docs work), then connect MongoDB.
+ * Start HTTP only after MongoDB AND Redis are connected.
  */
-const startServer = async (): Promise<void> => {
-  app.listen(config.port, () => {
-    console.log(`${MESSAGES.SERVER_RUNNING} on http://localhost:${config.port}`);
-    console.log(`Swagger docs: http://localhost:${config.port}/api/docs`);
-  });
+export class Server {
+  static async start(): Promise<void> {
+    try {
+      await DatabaseProvider.connect();
+      await RedisProvider.connect();
 
-  try {
-    await connectDatabase();
-  } catch (error) {
-    console.error(MESSAGES.DB_CONNECTION_ERROR, error);
-    console.error(
-      "Fix MONGODB_URI in .env with your real Atlas connection string."
-    );
-    console.error("Swagger still works at /api/docs — DB routes will fail until connected.");
+      app.listen(AppConfig.port, () => {
+        console.log(
+          `${Messages.SERVER_RUNNING} on http://localhost:${AppConfig.port}`
+        );
+        console.log(
+          `Swagger docs: http://localhost:${AppConfig.port}/api/docs`
+        );
+      });
+    } catch (error) {
+      console.error("Failed to start server:", error);
+      process.exit(1);
+    }
   }
-};
+}
 
-startServer();
+Server.start();
